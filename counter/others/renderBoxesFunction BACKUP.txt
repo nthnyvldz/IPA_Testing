@@ -1,0 +1,114 @@
+  Widget renderBoxesOnImage(
+      File _image, List<ResultObjectDetection?> _recognitions,
+      {Color? boxesColor, bool showPercentage = true}) {
+    //if (_recognitions == null) return Cont;
+    //if (_imageHeight == null || _imageWidth == null) return [];
+
+    //double factorX = screen.width;
+    //double factorY = _imageHeight / _imageWidth * screen.width;
+    boxesColor ??= Color.fromRGBO(46, 204, 113, 1.0);
+
+    print(_recognitions.length);
+    return LayoutBuilder(builder: (context, constraints) {
+      debugPrint(
+          'Max height: ${constraints.maxHeight}, max width: ${constraints.maxWidth}');
+      double factorX = constraints.maxWidth;
+      double factorY = constraints.maxHeight;
+      return Stack(
+        children: [
+          Positioned(
+            left: 0,
+            top: 0,
+            width: factorX,
+            height: factorY,
+            child: Container(
+                child: Image.file(
+              _image,
+              fit: BoxFit.fill,
+            )),
+          ),
+          ..._recognitions.map((re) {
+            if (re == null) {
+              return Container();
+            }
+            Color usedColor;
+            if (boxesColor == null) {
+              //change colors for each label
+              usedColor = Colors.primaries[
+                  ((re.className ?? re.classIndex.toString()).length +
+                          (re.className ?? re.classIndex.toString())
+                              .codeUnitAt(0) +
+                          re.classIndex) %
+                      Colors.primaries.length];
+            } else {
+              usedColor = boxesColor;
+            }
+
+            print({
+              "left": re.rect.left.toDouble() * factorX,
+              "top": re.rect.top.toDouble() * factorY,
+              "width": re.rect.width.toDouble() * factorX,
+              "height": re.rect.height.toDouble() * factorY,
+            });
+            return Positioned(
+              left: re.rect.left * factorX,
+              top: re.rect.top * factorY - 20,
+              //width: re.rect.width.toDouble(),
+              //height: re.rect.height.toDouble(),
+
+              //left: re?.rect.left.toDouble(),
+              //top: re?.rect.top.toDouble(),
+              //right: re.rect.right.toDouble(),
+              //bottom: re.rect.bottom.toDouble(),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    height: 20,
+                    alignment: Alignment.centerRight,
+                    color: Colors.greenAccent[700],
+                    // child: Text(
+                    //   (re.className ?? re.classIndex.toString()) +
+                    //       "" +
+                    //       (showPercentage
+                    //           ? (re.score * 100).toStringAsFixed(2) + "%"
+                    //           : ""),
+                    // ),
+                  ),
+                  Container(
+                    width: re.rect.width.toDouble() * factorX,
+                    height: re.rect.height.toDouble() * factorY,
+                    decoration: BoxDecoration(
+                        color: usedColor.withOpacity(0.5),
+                        border: Border.all(color: usedColor, width: 1),
+                        borderRadius: BorderRadius.all(Radius.circular(1))),
+                    child: Container(),
+                  ),
+                ],
+              ),
+              /*
+              Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.all(Radius.circular(8.0)),
+                  border: Border.all(
+                    color: boxesColor!,
+                    width: 2,
+                  ),
+                ),
+                child: Text(
+                  "${re.className ?? re.classIndex} ${(re.score * 100).toStringAsFixed(0)}%",
+                  style: TextStyle(
+                    background: Paint()..color = boxesColor!,
+                    color: Colors.white,
+                    fontSize: 12.0,
+                  ),
+                ),
+              ),*/
+            );
+          }).toList()
+        ],
+      );
+    });
+  }
