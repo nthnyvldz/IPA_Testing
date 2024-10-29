@@ -7,6 +7,7 @@ import 'package:flutter_pytorch/pigeon.dart';
 import 'package:flutter_pytorch/flutter_pytorch.dart';
 import 'results_screen.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 class CounterScreen extends StatefulWidget {
   @override
@@ -42,7 +43,22 @@ class _CounterScreenState extends State<CounterScreen> {
     }
   }
 
-  Future runObjectDetection(ImageSource source) async {
+  Future<void> runObjectDetection(ImageSource source) async {
+    // Request permissions based on the selected source
+    if (source == ImageSource.camera) {
+      var status = await Permission.camera.request();
+      if (!status.isGranted) {
+        _showPermissionDeniedDialog();
+        return;
+      }
+    } else if (source == ImageSource.gallery) {
+      var status = await Permission.photos.request();
+      if (!status.isGranted) {
+        _showPermissionDeniedDialog();
+        return;
+      }
+    }
+
     setState(() {
       isLoading = true;
     });
@@ -99,6 +115,34 @@ class _CounterScreenState extends State<CounterScreen> {
     }
   }
 
+  void _showPermissionDeniedDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('Permission Denied'),
+          content: Text(
+              'This app needs access to your camera and/or photo library to function. Please grant the permissions in settings.'),
+          actions: <Widget>[
+            TextButton(
+              child: Text('Open Settings'),
+              onPressed: () {
+                openAppSettings();
+                Navigator.of(context).pop();
+              },
+            ),
+            TextButton(
+              child: Text('Cancel'),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   void _showPicker(BuildContext context) {
     if (!averagingMode) {
       showModalBottomSheet(
@@ -146,8 +190,7 @@ class _CounterScreenState extends State<CounterScreen> {
           onPressed: () => Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (context) =>
-                  const HomeScreen(), // Navigate to CounterScreen
+              builder: (context) => const HomeScreen(),
             ),
           ),
           iconSize: 25,
