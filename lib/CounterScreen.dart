@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_pytorch/pigeon.dart';
 import 'package:flutter_pytorch/flutter_pytorch.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'results_screen.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -14,13 +15,12 @@ class CounterScreen extends StatefulWidget {
 }
 
 class _CounterScreenState extends State<CounterScreen> {
-  ModelObjectDetection? _objectModel; // Made nullable
+  late ModelObjectDetection _objectModel;
   ImagePicker _picker = ImagePicker();
   List<File> _images = [];
   List<List<ResultObjectDetection?>> _objDetectResults = [];
   bool averagingMode = false;
   bool isLoading = false;
-  bool modelLoaded = false;
 
   @override
   void initState() {
@@ -28,8 +28,26 @@ class _CounterScreenState extends State<CounterScreen> {
     loadModel();
   }
 
+  Future<void> checkPermissions() async {
+    // Check camera permission
+    var cameraStatus = await Permission.camera.status;
+    if (!cameraStatus.isGranted) {
+      await Permission.camera.request();
+    }
+
+    // Check photo library permission
+    var photoStatus = await Permission.photos.status;
+    if (!photoStatus.isGranted) {
+      await Permission.photos.request();
+    }
+  }
+
   Future loadModel() async {
     String pathObjectDetectionModel = "assets/models/fish.torchscript";
+
+    // Check permissions before loading the model
+    await checkPermissions();
+
     try {
       _objectModel = await FlutterPytorch.loadObjectDetectionModel(
         pathObjectDetectionModel,
@@ -38,154 +56,70 @@ class _CounterScreenState extends State<CounterScreen> {
         640,
         labelPath: "assets/labels/labels.txt",
       );
-      setState(() {
-        modelLoaded = true;
-      });
     } catch (e) {
-      print("Error loading model: $e");
-      showDialog(
-        context: context,
-        builder: (BuildContext context) {
-          return AlertDialog(
-            title: Text("Model Load Error"),
-            content: Text("Failed to load model: $e"),
-            actions: <Widget>[
-              TextButton(
-                child: Text("OK"),
-                onPressed: () {
-                  Navigator.of(context).pop();
-                },
-              ),
-            ],
-          );
-        },
-      );
+      debugPrint("Error loading model: ${e.toString()}");
+      showErrorDialog("Error loading model", e.toString());
     }
   }
 
   Future runObjectDetection(ImageSource source) async {
-    if (_objectModel == null) {
-      showDialog(
-        context: context,
-        builder: (BuildContext context) {
-          return AlertDialog(
-            title: Text("Error"),
-            content: Text("Model is not loaded yet. Please try again later."),
-            actions: <Widget>[
-              TextButton(
-                child: Text("OK"),
-                onPressed: () {
-                  Navigator.of(context).pop();
-                },
-              ),
-            ],
-          );
-        },
-      );
-      return;
-    }
-
     setState(() {
       isLoading = true;
     });
 
-    try {
-      final XFile? image = await _picker.pickImage(source: source);
-      if (image == null) {
-        setState(() {
-          isLoading = false;
-        });
-        return;
-      }
-
-      var objDetect = await _objectModel!.getImagePrediction(
-        await File(image.path).readAsBytes(),
-        minimumScore: 0.3,
-        IOUThershold: 0.2,
-        boxesLimit: 10000,
-      );
-
+    final XFile? image = await _picker.pickImage(source: source);
+    if (image == null) {
       setState(() {
-        _images.add(File(image.path));
-        _objDetectResults.add(objDetect);
         isLoading = false;
       });
+      return;
+    }
 
-      if (averagingMode) {
-        if (_images.length < 5) {
-          runObjectDetection(ImageSource.camera);
-        } else {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => ResultsScreen(
-                images: _images,
-                objDetectResults: _objDetectResults,
-                objectModel: _objectModel!,
-                averagingMode: averagingMode,
-              ),
-            ),
-          );
-        }
+    var objDetect = await _objectModel.getImagePrediction(
+      await File(image.path).readAsBytes(),
+      minimumScore: 0.3,
+      IOUThershold: 0.2,
+      boxesLimit: 10000,
+    );
+
+    setState(() {
+      _images.add(File(image.path));
+      _objDetectResults.add(objDetect);
+      isLoading = false;
+    });
+
+    if (averagingMode) {
+      if (_images.length < 5) {
+        runObjectDetection(ImageSource.camera);
       } else {
         Navigator.push(
           context,
           MaterialPageRoute(
             builder: (context) => ResultsScreen(
-              images: [_images.last],
-              objDetectResults: [_objDetectResults.last],
-              objectModel: _objectModel!,
+              images: _images,
+              objDetectResults: _objDetectResults,
+              objectModel: _objectModel,
               averagingMode: averagingMode,
             ),
           ),
         );
       }
-    } catch (e) {
-      setState(() {
-        isLoading = false;
-      });
-      showDialog(
-        context: context,
-        builder: (BuildContext context) {
-          return AlertDialog(
-            title: Text("Error"),
-            content: Text("An error occurred: $e"),
-            actions: <Widget>[
-              TextButton(
-                child: Text("OK"),
-                onPressed: () {
-                  Navigator.of(context).pop();
-                },
-              ),
-            ],
-          );
-        },
+    } else {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => ResultsScreen(
+            images: [_images.last],
+            objDetectResults: [_objDetectResults.last],
+            objectModel: _objectModel,
+            averagingMode: averagingMode,
+          ),
+        ),
       );
     }
   }
 
   void _showPicker(BuildContext context) {
-    if (!modelLoaded) {
-      showDialog(
-        context: context,
-        builder: (BuildContext context) {
-          return AlertDialog(
-            title: Text("Model Not Loaded"),
-            content: Text("Please wait until the model is loaded."),
-            actions: <Widget>[
-              TextButton(
-                child: Text("OK"),
-                onPressed: () {
-                  Navigator.of(context).pop();
-                },
-              ),
-            ],
-          );
-        },
-      );
-      return;
-    }
-
     if (!averagingMode) {
       showModalBottomSheet(
         context: context,
@@ -215,8 +149,29 @@ class _CounterScreenState extends State<CounterScreen> {
         },
       );
     } else {
-      runObjectDetection(ImageSource.camera);
+      runObjectDetection(
+          ImageSource.camera); // Directly use the camera if averagingMode is on
     }
+  }
+
+  void showErrorDialog(String title, String message) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text(title),
+          content: Text(message),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop(); // Close the dialog
+              },
+              child: Text('OK'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   @override
@@ -231,8 +186,7 @@ class _CounterScreenState extends State<CounterScreen> {
           onPressed: () => Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (context) =>
-                  const HomeScreen(), // Navigate to CounterScreen
+              builder: (context) => const HomeScreen(), // Navigate to HomeScreen
             ),
           ),
           iconSize: 25,
