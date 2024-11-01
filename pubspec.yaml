@@ -36,8 +36,8 @@ flutter:
 
   assets:
     - assets/images/
-    - assets/models/
-    - assets/labels/
+    - assets/models/fish.torchscript
+    - assets/labels/labels.txt
     - assets/images/homescreen.jpeg
     - assets/images/homescreen.jpeg
     - assets/images/clsu.png
