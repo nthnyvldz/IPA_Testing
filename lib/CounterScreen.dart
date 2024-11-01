@@ -47,54 +47,77 @@ class _CounterScreenState extends State<CounterScreen> {
       isLoading = true;
     });
 
-    final XFile? image = await _picker.pickImage(source: source);
-    if (image == null) {
+    try {
+      final XFile? image = await _picker.pickImage(source: source);
+      if (image == null) {
+        setState(() {
+          isLoading = false;
+        });
+        return;
+      }
+
+      var objDetect = await _objectModel.getImagePrediction(
+        await File(image.path).readAsBytes(),
+        minimumScore: 0.3,
+        IOUThershold: 0.2,
+        boxesLimit: 10000,
+      );
+
       setState(() {
+        _images.add(File(image.path));
+        _objDetectResults.add(objDetect);
         isLoading = false;
       });
-      return;
-    }
 
-    var objDetect = await _objectModel.getImagePrediction(
-      await File(image.path).readAsBytes(),
-      minimumScore: 0.3,
-      IOUThershold: 0.2,
-      boxesLimit: 10000,
-    );
-
-    setState(() {
-      _images.add(File(image.path));
-      _objDetectResults.add(objDetect);
-      isLoading = false;
-    });
-
-    if (averagingMode) {
-      if (_images.length < 5) {
-        runObjectDetection(ImageSource.camera);
+      if (averagingMode) {
+        if (_images.length < 5) {
+          runObjectDetection(ImageSource.camera);
+        } else {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => ResultsScreen(
+                images: _images,
+                objDetectResults: _objDetectResults,
+                objectModel: _objectModel,
+                averagingMode: averagingMode,
+              ),
+            ),
+          );
+        }
       } else {
         Navigator.push(
           context,
           MaterialPageRoute(
             builder: (context) => ResultsScreen(
-              images: _images,
-              objDetectResults: _objDetectResults,
+              images: [_images.last],
+              objDetectResults: [_objDetectResults.last],
               objectModel: _objectModel,
               averagingMode: averagingMode,
             ),
           ),
         );
       }
-    } else {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => ResultsScreen(
-            images: [_images.last],
-            objDetectResults: [_objDetectResults.last],
-            objectModel: _objectModel,
-            averagingMode: averagingMode,
-          ),
-        ),
+    } catch (e) {
+      setState(() {
+        isLoading = false;
+      });
+      showDialog(
+        context: context,
+        builder: (BuildContext context) {
+          return AlertDialog(
+            title: Text("Error"),
+            content: Text("An error occurred: $e"),
+            actions: <Widget>[
+              TextButton(
+                child: Text("OK"),
+                onPressed: () {
+                  Navigator.of(context).pop();
+                },
+              ),
+            ],
+          );
+        },
       );
     }
   }
