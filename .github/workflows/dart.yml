@@ -14,24 +14,39 @@ jobs:
         with:
           channel: 'stable'
           architecture: x64
-      - run: flutter pub get
       
+      # Run flutter pub outdated to list outdated packages
+      - run: flutter pub outdated
 
+      # Upgrade only outdated packages
+      - run: flutter pub upgrade --major-versions
+
+      # Clean the Flutter build to remove cached data
+      - run: flutter clean
+
+      # Get dependencies after cleaning
+      - run: flutter pub get
+
+      # Update CocoaPods repository
       - run: pod repo update
         working-directory: ios
 
+      # Build iOS release without code signing
       - run: flutter build ios --release --no-codesign
 
+      # Prepare the Payload folder for .ipa packaging
       - run: mkdir Payload
         working-directory: build/ios/iphoneos
 
       - run: mv Runner.app/ Payload
         working-directory: build/ios/iphoneos
 
+      # Zip the Payload folder to create the .ipa file
       - name: Zip output
         run: zip -qq -r -9 FlutterIpaExport.ipa Payload
         working-directory: build/ios/iphoneos
 
+      # Upload the .ipa file to the release
       - name: Upload binaries to release
         uses: svenstaro/upload-release-action@v2
         with:
