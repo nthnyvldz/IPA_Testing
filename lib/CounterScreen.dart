@@ -14,12 +14,13 @@ class CounterScreen extends StatefulWidget {
 }
 
 class _CounterScreenState extends State<CounterScreen> {
-  late ModelObjectDetection _objectModel;
+  ModelObjectDetection? _objectModel; // Made nullable
   ImagePicker _picker = ImagePicker();
   List<File> _images = [];
   List<List<ResultObjectDetection?>> _objDetectResults = [];
   bool averagingMode = false;
   bool isLoading = false;
+  bool modelLoaded = false;
 
   @override
   void initState() {
@@ -37,12 +38,53 @@ class _CounterScreenState extends State<CounterScreen> {
         640,
         labelPath: "assets/labels/labels.txt",
       );
+      setState(() {
+        modelLoaded = true;
+      });
     } catch (e) {
       print("Error loading model: $e");
+      showDialog(
+        context: context,
+        builder: (BuildContext context) {
+          return AlertDialog(
+            title: Text("Model Load Error"),
+            content: Text("Failed to load model: $e"),
+            actions: <Widget>[
+              TextButton(
+                child: Text("OK"),
+                onPressed: () {
+                  Navigator.of(context).pop();
+                },
+              ),
+            ],
+          );
+        },
+      );
     }
   }
 
   Future runObjectDetection(ImageSource source) async {
+    if (_objectModel == null) {
+      showDialog(
+        context: context,
+        builder: (BuildContext context) {
+          return AlertDialog(
+            title: Text("Error"),
+            content: Text("Model is not loaded yet. Please try again later."),
+            actions: <Widget>[
+              TextButton(
+                child: Text("OK"),
+                onPressed: () {
+                  Navigator.of(context).pop();
+                },
+              ),
+            ],
+          );
+        },
+      );
+      return;
+    }
+
     setState(() {
       isLoading = true;
     });
@@ -56,7 +98,7 @@ class _CounterScreenState extends State<CounterScreen> {
         return;
       }
 
-      var objDetect = await _objectModel.getImagePrediction(
+      var objDetect = await _objectModel!.getImagePrediction(
         await File(image.path).readAsBytes(),
         minimumScore: 0.3,
         IOUThershold: 0.2,
@@ -79,7 +121,7 @@ class _CounterScreenState extends State<CounterScreen> {
               builder: (context) => ResultsScreen(
                 images: _images,
                 objDetectResults: _objDetectResults,
-                objectModel: _objectModel,
+                objectModel: _objectModel!,
                 averagingMode: averagingMode,
               ),
             ),
@@ -92,7 +134,7 @@ class _CounterScreenState extends State<CounterScreen> {
             builder: (context) => ResultsScreen(
               images: [_images.last],
               objDetectResults: [_objDetectResults.last],
-              objectModel: _objectModel,
+              objectModel: _objectModel!,
               averagingMode: averagingMode,
             ),
           ),
@@ -123,6 +165,27 @@ class _CounterScreenState extends State<CounterScreen> {
   }
 
   void _showPicker(BuildContext context) {
+    if (!modelLoaded) {
+      showDialog(
+        context: context,
+        builder: (BuildContext context) {
+          return AlertDialog(
+            title: Text("Model Not Loaded"),
+            content: Text("Please wait until the model is loaded."),
+            actions: <Widget>[
+              TextButton(
+                child: Text("OK"),
+                onPressed: () {
+                  Navigator.of(context).pop();
+                },
+              ),
+            ],
+          );
+        },
+      );
+      return;
+    }
+
     if (!averagingMode) {
       showModalBottomSheet(
         context: context,
@@ -152,8 +215,7 @@ class _CounterScreenState extends State<CounterScreen> {
         },
       );
     } else {
-      runObjectDetection(
-          ImageSource.camera); // Directly use the camera if averagingMode is on
+      runObjectDetection(ImageSource.camera);
     }
   }
 
